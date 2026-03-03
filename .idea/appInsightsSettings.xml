@@ -8,10 +8,10 @@
             <InsightsFilterSettings>
               <option name="connection">
                 <ConnectionSetting>
-                  <option name="appId" value="PLACEHOLDER" />
-                  <option name="mobileSdkAppId" value="" />
-                  <option name="projectId" value="" />
-                  <option name="projectNumber" value="" />
+                  <option name="appId" value="com.example.screen_timetracker" />
+                  <option name="mobileSdkAppId" value="1:177695763440:android:b01cbacc0b21292adb8b35" />
+                  <option name="projectId" value="screentimetracker-9bf13448" />
+                  <option name="projectNumber" value="177695763440" />
                 </ConnectionSetting>
               </option>
               <option name="signal" value="SIGNAL_UNSPECIFIED" />

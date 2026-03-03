@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "177695763440",
+    "project_id": "screentimetracker-9bf13448",
+    "storage_bucket": "screentimetracker-9bf13448.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:177695763440:android:b01cbacc0b21292adb8b35",
+        "android_client_info": {
+          "package_name": "com.example.screen_timetracker"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBBaqd9uLH2rfehkFfZ10zZfC2OvjDejzY"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

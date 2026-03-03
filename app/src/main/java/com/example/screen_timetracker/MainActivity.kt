@@ -22,6 +22,22 @@ class MainActivity : AppCompatActivity() {
         if (!hasUsageStatsPermission()) {
             requestUsageStatsPermission()
         }
+        // Find the button we just made
+        val btnDashboard = findViewById<android.widget.Button>(R.id.btnOpenDashboard)
+
+        // Wire it up to open the FriendDashboardActivity
+        btnDashboard.setOnClickListener {
+            val intent = android.content.Intent(this, FriendDashboardActivity::class.java)
+            startActivity(intent)
+        }
+        // Find the new Settings button
+        val btnSettings = findViewById<android.widget.Button>(R.id.btnOpenSettings)
+
+        // Wire it up to open the SettingsActivity
+        btnSettings.setOnClickListener {
+            val intent = android.content.Intent(this, SettingsActivity::class.java)
+            startActivity(intent)
+        }
     }
 
     override fun onResume() {
