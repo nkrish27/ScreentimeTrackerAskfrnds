@@ -4,5 +4,7 @@ data class ExtensionRequest(
     val documentId: String,
     val appPackage: String,
     val status: String,
-    val timeRequestedMins: Int
+    val timeRequestedMins: Int,
+    val userId: String,
+    val userName: String
 )

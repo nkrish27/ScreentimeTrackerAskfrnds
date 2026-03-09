@@ -16,10 +16,12 @@ class RequestAdapter(private var requests: List<ExtensionRequest>) : RecyclerVie
     class RequestViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         val tvAppName: TextView = itemView.findViewById(R.id.tvAppName)
         val tvStatus: TextView = itemView.findViewById(R.id.tvStatus)
-        val btnApprove: Button = itemView.findViewById(R.id.btnApprove)
-        val ivAppIcon: ImageView = itemView.findViewById(R.id.ivAppIcon) // Make sure this line is here!
-    }
 
+        val tvFriendName: TextView = itemView.findViewById(R.id.tvFriendName)
+        val btnApprove: Button = itemView.findViewById(R.id.btnApprove)
+        val ivAppIcon: ImageView = itemView.findViewById(R.id.ivAppIcon)
+        val btnDecline: Button = itemView.findViewById(R.id.btnDecline) // Added Decline Button
+    }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RequestViewHolder {
         val view = LayoutInflater.from(parent.context).inflate(R.layout.item_request, parent, false)
@@ -29,73 +31,89 @@ class RequestAdapter(private var requests: List<ExtensionRequest>) : RecyclerVie
     override fun getItemCount(): Int = requests.size
 
     override fun onBindViewHolder(holder: RequestViewHolder, position: Int) {
-        // 1. Grab the specific request for this row using the 'position'
         val currentRequest = requests[position]
-
         val pm = holder.itemView.context.packageManager
-        // Note: ensure 'packageName' is the actual variable name inside your ExtensionRequest data class
         val packageName = currentRequest.appPackage
+        holder.tvFriendName.text = "${currentRequest.userName} wants to use:"
 
         try {
             val appInfo = pm.getApplicationInfo(packageName, 0)
             val appName = pm.getApplicationLabel(appInfo).toString()
             val appIcon = pm.getApplicationIcon(packageName)
 
-            // 2. Update these to match the IDs in your RequestViewHolder
             holder.tvAppName.text = appName
             holder.ivAppIcon.setImageDrawable(appIcon)
 
         } catch (e: PackageManager.NameNotFoundException) {
-            // Fallback
             holder.tvAppName.text = packageName
         }
 
-        // 1. Read the actual status from your database object
-        // (Make sure 'status' matches the variable name in your ExtensionRequest data class)
         val currentStatus = currentRequest.status
 
-        // 2. Explicitly set ALL visual states based on that status
-        if (currentStatus == "approved") {
-            holder.tvStatus.text = "Status: Approved"
-            holder.tvStatus.setTextColor(Color.parseColor("#4CAF50")) // Green
-            holder.btnApprove.text = "Approved"
-            holder.btnApprove.isEnabled = false // Don't let them click it again
-        } else {
-            holder.tvStatus.text = "Status: Pending"
-            holder.tvStatus.setTextColor(Color.parseColor("#FFA500")) // Orange
-            holder.btnApprove.text = "Approve"
-            holder.btnApprove.isEnabled = true // Ready to be clicked
+        // Explicitly set ALL visual states for Approved, Declined, and Pending
+        when (currentStatus) {
+            "approved" -> {
+                holder.tvStatus.text = "Status: Approved"
+                holder.tvStatus.setTextColor(Color.parseColor("#4CAF50")) // Green
+                holder.btnApprove.text = "Approved"
+                holder.btnApprove.isEnabled = false
+                holder.btnDecline.visibility = View.GONE // Hide decline button
+            }
+            "declined" -> {
+                holder.tvStatus.text = "Status: Declined"
+                holder.tvStatus.setTextColor(Color.parseColor("#F44336")) // Red
+                holder.btnApprove.visibility = View.GONE // Hide approve button
+                holder.btnDecline.text = "Declined"
+                holder.btnDecline.isEnabled = false
+                holder.btnDecline.visibility = View.VISIBLE
+            }
+            else -> {
+                holder.tvStatus.text = "Status: Pending"
+                holder.tvStatus.setTextColor(Color.parseColor("#FFA500")) // Orange
+                holder.btnApprove.text = "Approve"
+                holder.btnDecline.text = "Decline"
+                holder.btnApprove.isEnabled = true
+                holder.btnDecline.isEnabled = true
+                holder.btnApprove.visibility = View.VISIBLE
+                holder.btnDecline.visibility = View.VISIBLE
+            }
         }
 
-        // 3. The Click Listener
+        val db = FirebaseFirestore.getInstance()
+        val documentId = currentRequest.documentId
+
+        // The Approve Click Listener
         holder.btnApprove.setOnClickListener {
             holder.btnApprove.isEnabled = false
+            holder.btnDecline.isEnabled = false
             holder.btnApprove.text = "Approving..."
 
-            val db = FirebaseFirestore.getInstance()
-
-            // NOTE: Make sure currentRequest.documentId matches your actual ID variable!
-            val documentId = currentRequest.documentId
-
-            db.collection("requests").document(documentId)
+            // Update the status in the database
+            db.collection("users").document(currentRequest.userId).collection("extension_requests").document(documentId)
                 .update("status", "approved")
-                .addOnSuccessListener {
-                    // Update visuals on success
-                    holder.tvStatus.text = "Status: Approved"
-                    holder.tvStatus.setTextColor(Color.parseColor("#4CAF50"))
-                    holder.btnApprove.text = "Approved"
-                }
-                .addOnFailureListener { e ->
-                    // Reset visuals if it fails
+                .addOnFailureListener {
                     holder.btnApprove.isEnabled = true
+                    holder.btnDecline.isEnabled = true
                     holder.btnApprove.text = "Approve"
-                    holder.tvStatus.text = "Error: Try again"
-                    holder.tvStatus.setTextColor(Color.parseColor("#FF0000"))
+                }
+        }
+
+        // The Decline Click Listener
+        holder.btnDecline.setOnClickListener {
+            holder.btnApprove.isEnabled = false
+            holder.btnDecline.isEnabled = false
+            holder.btnDecline.text = "Declining..."
+
+            db.collection("users").document(currentRequest.userId).collection("extension_requests").document(documentId)
+                .update("status", "declined")
+                .addOnFailureListener {
+                    holder.btnApprove.isEnabled = true
+                    holder.btnDecline.isEnabled = true
+                    holder.btnDecline.text = "Decline"
                 }
         }
     }
 
-    // Function to update the list when new data arrives from the cloud
     fun updateData(newRequests: List<ExtensionRequest>) {
         this.requests = newRequests
         notifyDataSetChanged()

@@ -12,7 +12,20 @@
           "package_name": "com.example.screen_timetracker"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "177695763440-4kdgsafhrrvmkk6oc25jhri7jtie6101.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.screen_timetracker",
+            "certificate_hash": "a7dc2a92a83b68c70f891dee67699177d817a49c"
+          }
+        },
+        {
+          "client_id": "177695763440-t6lt3hm8hln2klrqn5jc2p40dfffhvdm.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyBBaqd9uLH2rfehkFfZ10zZfC2OvjDejzY"
@@ -20,7 +33,12 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "177695763440-t6lt3hm8hln2klrqn5jc2p40dfffhvdm.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
         }
       }
     }

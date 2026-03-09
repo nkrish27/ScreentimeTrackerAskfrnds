@@ -25,6 +25,9 @@ class ScreenTimeService : Service() {
     private var windowManager: android.view.WindowManager? = null
     private var overlayView: android.view.View? = null
     private var isOverlayShowing = false
+    // Phase 6: Push Notification Workaround Variables
+    private val friendListeners = mutableListOf<com.google.firebase.firestore.ListenerRegistration>()
+    private val serviceStartTime = System.currentTimeMillis()
 
     // 2. The Runnable: This is the code that runs every second
     private val checkUsageRunnable = object : Runnable {
@@ -52,6 +55,8 @@ class ScreenTimeService : Service() {
 
         // 3. START THE LOOP: Begin tracking immediately
         handler.post(checkUsageRunnable)
+
+        listenForFriendRequests()
 
         return START_STICKY
     }
@@ -170,7 +175,7 @@ class ScreenTimeService : Service() {
         windowManager?.addView(overlayView, params)
         isOverlayShowing = true
 
-        // (Phase 3 Prep) Wire up the beg button so it doesn't crash later
+        // Wire up the beg button so it doesn't crash later
         val begButton = overlayView?.findViewById<android.widget.Button>(R.id.btnBegFriend)
         begButton?.setOnClickListener {
             // Give instant UI feedback and prevent spam-clicking
@@ -180,57 +185,81 @@ class ScreenTimeService : Service() {
             val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
 
             // This is the "Document" we are pushing to the cloud
+            val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
+            val currentUser = auth.currentUser
+            val myName = currentUser?.displayName ?: "Unknown Friend"
+
             val requestData = hashMapOf(
                 "status" to "pending",
-                "app_package" to lastForegroundPackage, // Dynamically sends 'com.pinterest' or whatever is blocked
+                "appPackage" to lastForegroundPackage,
                 "time_requested_mins" to 10,
-                "timestamp" to com.google.firebase.firestore.FieldValue.serverTimestamp()
+                "timestamp" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
+                "userName" to myName // Add this to the map!
             )
-
             // Push it to a collection named 'extension_requests'
-            db.collection("extension_requests")
-                .add(requestData)
-                .addOnSuccessListener { documentReference ->
-                    android.widget.Toast.makeText(this, "Sent! Waiting for mercy...", android.widget.Toast.LENGTH_SHORT).show()
-                    begButton.text = "Waiting for friend..."
 
-                    // PHASE 4: The Listener
-                    // We attach a live listener to the exact document ID we just created
-                    currentListener = db.collection("extension_requests").document(documentReference.id)
-                        .addSnapshotListener { snapshot, e ->
-                            if (e != null) {
-                                Log.w("Firebase", "Listen failed.", e)
-                                return@addSnapshotListener
-                            }
 
-                            if (snapshot != null && snapshot.exists()) {
-                                val status = snapshot.getString("status")
-                                Log.d("Firebase", "Current status: $status")
+            if (currentUser != null) {
+                val myUid = currentUser.uid
 
-                                if (status == "approved") {
-                                    // 1. Give them 10 minutes of freedom (600,000 milliseconds)
-                                    // For testing right now, let's use 1 minute (60,000 ms) so you don't have to wait 10 mins to test it again
-                                    temporaryUnlockEndTime = System.currentTimeMillis() + 60000
+                // NEW PATH: users -> [myUid] -> extension_requests
+                val myRequestsRef = db.collection("users").document(myUid).collection("extension_requests")
 
-                                    // 2. Hide the overlay
-                                    handler.post {
-                                        hideOverlay()
-                                        android.widget.Toast.makeText(this@ScreenTimeService, "ACCESS GRANTED! You have 1 minute.", android.widget.Toast.LENGTH_LONG).show()
+                myRequestsRef.add(requestData)
+                    .addOnSuccessListener { documentReference ->
+                        android.widget.Toast.makeText(this@ScreenTimeService, "Sent! Waiting for mercy...", android.widget.Toast.LENGTH_SHORT).show()
+                        begButton.text = "Waiting for friend..."
+
+                        // PHASE 4: The Listener (now pointing to the private path)
+                        currentListener = myRequestsRef.document(documentReference.id)
+                            .addSnapshotListener { snapshot, e ->
+                                if (e != null) {
+                                    Log.w("Firebase", "Listen failed.", e)
+                                    return@addSnapshotListener
+                                }
+
+                                if (snapshot != null && snapshot.exists()) {
+                                    val status = snapshot.getString("status")
+                                    Log.d("Firebase", "Current status: $status")
+
+                                    if (status == "approved") {
+                                        // 1. Give them 1 minute of freedom for testing (60,000 ms)
+                                        temporaryUnlockEndTime = System.currentTimeMillis() + 60000
+
+                                        // 2. Hide the overlay
+                                        handler.post {
+                                            hideOverlay()
+                                            android.widget.Toast.makeText(this@ScreenTimeService, "ACCESS GRANTED! You have 1 minute.", android.widget.Toast.LENGTH_LONG).show()
+                                        }
+
+                                        // 3. Kill the listener so it stops watching the database
+                                        currentListener?.remove()
+
+                                    } else if (status == "declined") {
+                                        // DECLINE LOGIC WE ADDED EARLIER
+                                        handler.post {
+                                            begButton.text = "Request Declined"
+                                            begButton.isEnabled = true
+                                            android.widget.Toast.makeText(this@ScreenTimeService, "Your friend denied the request.", android.widget.Toast.LENGTH_LONG).show()
+                                        }
+                                        currentListener?.remove()
                                     }
-
-                                    // 3. Kill the listener so it stops watching the database
-                                    currentListener?.remove()
                                 }
                             }
-                        }
+                    }
+                    .addOnFailureListener { e ->
+                        Log.e("Firebase", "Error adding document", e)
+                        android.widget.Toast.makeText(this@ScreenTimeService, "Failed to send.", android.widget.Toast.LENGTH_SHORT).show()
+                        begButton.text = "Beg Friend for 10 Mins"
+                        begButton.isEnabled = true
+                    }
+            } else {
+                // Failsafe in case the user's login session expired
+                handler.post {
+                    android.widget.Toast.makeText(this@ScreenTimeService, "Error: Not logged in!", android.widget.Toast.LENGTH_SHORT).show()
+                    begButton.text = "Error: Must be logged in"
                 }
-                .addOnFailureListener { e ->
-                    Log.e("Firebase", "Error adding document", e)
-                    android.widget.Toast.makeText(this, "Failed to send.", android.widget.Toast.LENGTH_SHORT).show()
-                    begButton.text = "Beg Friend for 10 Mins"
-                    begButton.isEnabled = true
-                }
-
+            }
         }
     }
 
@@ -281,5 +310,63 @@ class ScreenTimeService : Service() {
         }
 
         return totalTimeMs
+    }
+    private fun listenForFriendRequests() {
+        val prefs = getSharedPreferences("FriendPrefs", Context.MODE_PRIVATE)
+        val savedFriends = prefs.getStringSet("friend_uids", mutableSetOf()) ?: mutableSetOf()
+        val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
+
+        // Clear old listeners if this is restarted
+        friendListeners.forEach { it.remove() }
+        friendListeners.clear()
+
+        for (uid in savedFriends) {
+            val listener = db.collection("users").document(uid).collection("extension_requests")
+                .whereEqualTo("status", "pending")
+                .addSnapshotListener { snapshot, e ->
+                    if (e != null || snapshot == null) return@addSnapshotListener
+
+                    for (change in snapshot.documentChanges) {
+                        // Only look at BRAND NEW requests
+                        if (change.type == com.google.firebase.firestore.DocumentChange.Type.ADDED) {
+
+                            val timestamp = change.document.getTimestamp("timestamp")?.toDate()?.time ?: 0
+
+                            // CRITICAL: Ignore old pending requests from before the phone turned on
+                            if (timestamp > serviceStartTime) {
+                                val friendName = change.document.getString("userName") ?: "A friend"
+                                val appPackage = change.document.getString("appPackage") ?: "an app"
+
+                                sendLocalNotification(friendName, appPackage)
+                            }
+                        }
+                    }
+                }
+            friendListeners.add(listener)
+        }
+    }
+
+    private fun sendLocalNotification(friendName: String, appPackage: String) {
+        val manager = getSystemService(Context.NOTIFICATION_SERVICE) as android.app.NotificationManager
+
+        // This makes tapping the notification open the Friend Dashboard
+        val intent = android.content.Intent(this, FriendDashboardActivity::class.java)
+        val pendingIntent = android.app.PendingIntent.getActivity(
+            this, 0, intent,
+            android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT
+        )
+
+        val notification = androidx.core.app.NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("Screen Time Request!")
+            .setContentText("$friendName is begging to use $appPackage.")
+            .setSmallIcon(android.R.drawable.ic_dialog_alert) // Built-in Android icon
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true) // Dismisses when tapped
+            .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH) // Pops up on screen
+            .setDefaults(androidx.core.app.NotificationCompat.DEFAULT_ALL) // Plays sound/vibrate
+            .build()
+
+        // Use a random ID so multiple requests stack up instead of overwriting each other
+        manager.notify(System.currentTimeMillis().toInt(), notification)
     }
 }
