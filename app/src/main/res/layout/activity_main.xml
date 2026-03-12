@@ -28,4 +28,20 @@
         android:layout_marginTop="16dp"
         android:text="Select Apps to Block" />
 
+    <TextView
+        android:id="@+id/tvMyUid"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="My UID: Loading..."
+        android:textSize="14sp"
+        android:textIsSelectable="true"
+        android:layout_marginBottom="8dp" />
+
+    <Button
+        android:id="@+id/btnCopyUid"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Copy My UID"
+        android:layout_marginBottom="24dp" />
+
 </LinearLayout>

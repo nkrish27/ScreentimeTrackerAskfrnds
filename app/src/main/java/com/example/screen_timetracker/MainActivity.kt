@@ -25,7 +25,7 @@ class MainActivity : AppCompatActivity() {
         if (!hasUsageStatsPermission()) {
             requestUsageStatsPermission()
         }
-        // Find the button we just made
+        // Find the button that opens the FriendDashboardActivity
         val btnDashboard = findViewById<android.widget.Button>(R.id.btnOpenDashboard)
 
         // Wire it up to open the FriendDashboardActivity
@@ -33,7 +33,7 @@ class MainActivity : AppCompatActivity() {
             val intent = android.content.Intent(this, FriendDashboardActivity::class.java)
             startActivity(intent)
         }
-        // Find the new Settings button
+        // Find the button that opens the SettingsActivity
         val btnSettings = findViewById<android.widget.Button>(R.id.btnOpenSettings)
 
         // Wire it up to open the SettingsActivity
@@ -41,22 +41,38 @@ class MainActivity : AppCompatActivity() {
             val intent = android.content.Intent(this, SettingsActivity::class.java)
             startActivity(intent)
         }
+        // Find the views we just added
+        val tvMyUid = findViewById<android.widget.TextView>(R.id.tvMyUid)
+        val btnCopyUid = findViewById<android.widget.Button>(R.id.btnCopyUid)
 
+        // Get the actual UID
+        val auth = com.google.firebase.auth.FirebaseAuth.getInstance()
+        val myUid = auth.currentUser?.uid ?: "Not logged in"
+
+        // Show it on screen
+        tvMyUid.text = "My UID:\n$myUid"
+
+        // Make the copy button work
+        btnCopyUid.setOnClickListener {
+            val clipboard = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            val clip = android.content.ClipData.newPlainText("User UID", myUid)
+            clipboard.setPrimaryClip(clip)
+
+            android.widget.Toast.makeText(this, "UID Copied! Send it to your friend.", android.widget.Toast.LENGTH_LONG).show()
+        }
     }
 
     override fun onResume() {
         super.onResume()
-        // 1. First, ensure we can track screen time
         if (!hasUsageStatsPermission()) {
             requestUsageStatsPermission()
-            return // Stop here until they grant it
+            return
         }
-        // 2. If that's good, check if we can BLOCK apps
         if (!hasOverlayPermission()) {
             requestOverlayPermission()
-            return // Stop here until they grant it
+            return
         }
-        // 3. Check Notifications (New!)
+        //  Check Notifications
         // Only needed for Android 13+
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
             if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) !=
@@ -65,8 +81,6 @@ class MainActivity : AppCompatActivity() {
                 return
             }
         }
-
-        // 3. If we have all of them, start the service
         startTrackerService()
     }
     private fun hasUsageStatsPermission(): Boolean {

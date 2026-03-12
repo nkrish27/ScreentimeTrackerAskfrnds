@@ -21,6 +21,17 @@
         android:textSize="24sp"
         android:layout_marginBottom="48dp"/>
 
+    <EditText
+        android:id="@+id/etRequestedMinutes"
+        android:layout_width="150dp"
+        android:layout_height="wrap_content"
+        android:hint="Minutes (e.g. 15)"
+        android:inputType="number"
+        android:gravity="center"
+        android:layout_marginBottom="16dp"
+        android:background="#FFFFFF"
+        android:padding="8dp"/>
+
     <Button
         android:id="@+id/btnBegFriend"
         android:layout_width="wrap_content"

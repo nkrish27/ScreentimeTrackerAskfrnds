@@ -55,9 +55,7 @@ class ScreenTimeService : Service() {
 
         // 3. START THE LOOP: Begin tracking immediately
         handler.post(checkUsageRunnable)
-
         listenForFriendRequests()
-
         return START_STICKY
     }
 
@@ -94,7 +92,11 @@ class ScreenTimeService : Service() {
                 lastForegroundPackage = currentApp
                 Log.d("ScreenTimeTracker", "DETECTED APP: $currentApp")
             }
-
+            // EXEMPTION CHECK: If it's a safe app like the Home Screen, kill the overlay instantly
+        if (getExemptPackages().contains(currentApp)) {
+                handler.post { hideOverlay() }
+            return
+        }
             // FIX 2: Evaluate the block logic EVERY SECOND, even if the app hasn't changed
             // FIX 2: Evaluate the block logic based on DAILY QUOTA
 // 1. Grab the list of blocked apps from storage
@@ -102,15 +104,20 @@ class ScreenTimeService : Service() {
             val blockedApps = prefs.getStringSet("blocked_apps", setOf()) ?: setOf()
 
             // FIX 2: Check if the current app is in our dynamic block list
+            // FIX 2: Check if the current app is in our dynamic block list
             if (blockedApps.contains(currentApp)) {
 
-                // Keep your existing daily quota logic exactly as it is!
                 val totalTodayMs = getDailyUsage(currentApp)
                 val totalTodayMins = totalTodayMs / (1000 * 60)
 
-                Log.d("ScreenTimeTracker", "$currentApp used today: $totalTodayMins / $DAILY_LIMIT_MINUTES mins")
+                // NEW: Fetch the specific limit for this app from SharedPreferences
+                // (If something goes wrong and it can't find it, default to 0 mins so it blocks immediately)
+                val appLimitMins = prefs.getInt("limit_$currentApp", 0)
 
-                if (totalTodayMins >= DAILY_LIMIT_MINUTES) {
+                Log.d("ScreenTimeTracker", "$currentApp used today: $totalTodayMins / $appLimitMins mins")
+
+                // NEW: Compare against the specific app's limit, not the global limit
+                if (totalTodayMins >= appLimitMins) {
                     if (System.currentTimeMillis() > temporaryUnlockEndTime) {
                         handler.post { showOverlay() }
                     } else {
@@ -120,8 +127,6 @@ class ScreenTimeService : Service() {
                     handler.post { hideOverlay() }
                 }
 
-            } else if (currentApp == "com.android.launcher" || currentApp == "com.example.screen_timetracker") {
-                handler.post { hideOverlay() }
             }
         }
     }
@@ -153,6 +158,7 @@ class ScreenTimeService : Service() {
 
 
     private fun showOverlay() {
+
         if (isOverlayShowing) return // Don't draw it twice
 
         // Inflate the XML we just made
@@ -176,11 +182,15 @@ class ScreenTimeService : Service() {
         isOverlayShowing = true
 
         // Wire up the beg button so it doesn't crash later
+        val etRequestedMinutes = overlayView?.findViewById<android.widget.EditText>(R.id.etRequestedMinutes)
         val begButton = overlayView?.findViewById<android.widget.Button>(R.id.btnBegFriend)
         begButton?.setOnClickListener {
             // Give instant UI feedback and prevent spam-clicking
             begButton.text = "Sending Request..."
             begButton.isEnabled = false
+
+            val inputStr = etRequestedMinutes?.text.toString()
+            val requestedMins = if (inputStr.isNotEmpty()) inputStr.toInt() else 15
 
             val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
 
@@ -192,7 +202,7 @@ class ScreenTimeService : Service() {
             val requestData = hashMapOf(
                 "status" to "pending",
                 "appPackage" to lastForegroundPackage,
-                "time_requested_mins" to 10,
+                "time_requested_mins" to requestedMins,
                 "timestamp" to com.google.firebase.firestore.FieldValue.serverTimestamp(),
                 "userName" to myName // Add this to the map!
             )
@@ -223,8 +233,10 @@ class ScreenTimeService : Service() {
                                     Log.d("Firebase", "Current status: $status")
 
                                     if (status == "approved") {
-                                        // 1. Give them 1 minute of freedom for testing (60,000 ms)
-                                        temporaryUnlockEndTime = System.currentTimeMillis() + 60000
+                                        // 1. Get the time they approved (fallback to 10 mins if missing)
+                                        val grantedMins = snapshot.getLong("time_requested_mins") ?: 10L
+                                        val grantedMs = grantedMins * 60 * 1000 // Convert to milliseconds
+                                        temporaryUnlockEndTime = System.currentTimeMillis() + grantedMs
 
                                         // 2. Hide the overlay
                                         handler.post {
@@ -368,5 +380,22 @@ class ScreenTimeService : Service() {
 
         // Use a random ID so multiple requests stack up instead of overwriting each other
         manager.notify(System.currentTimeMillis().toInt(), notification)
+    }
+    // Gets the package name of whatever Launcher the phone is currently using
+    private fun getDefaultLauncherPackage(): String {
+        val intent = android.content.Intent(android.content.Intent.ACTION_MAIN)
+        intent.addCategory(android.content.Intent.CATEGORY_HOME)
+        val resolveInfo = packageManager.resolveActivity(intent, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
+        return resolveInfo?.activityInfo?.packageName ?: ""
+    }
+
+    // Creates a list of apps that should NEVER be blocked
+    private fun getExemptPackages(): List<String> {
+        return listOf(
+            packageName, // Your Screen Time app itself
+            getDefaultLauncherPackage(), // The user's Home Screen
+            "com.android.systemui", // The Android notification pull-down menu
+            "com.android.settings" // The phone's settings app (optional, but good for testing)
+        )
     }
 }
