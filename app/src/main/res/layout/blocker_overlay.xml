@@ -30,7 +30,11 @@
         android:gravity="center"
         android:layout_marginBottom="16dp"
         android:background="#FFFFFF"
-        android:padding="8dp"/>
+        android:padding="8dp"
+
+        android:textColor="#FF4500"
+        android:textColorHint="#888888" />
+
 
     <Button
         android:id="@+id/btnBegFriend"

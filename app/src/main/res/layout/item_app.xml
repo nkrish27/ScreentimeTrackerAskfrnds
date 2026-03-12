@@ -21,7 +21,10 @@
         android:layout_height="wrap_content"
         android:hint="Mins"
         android:inputType="number"
-        android:gravity="center" />
+        android:gravity="center"
+
+        android:textColor="#FF4500"
+        android:textColorHint="#888888" />
 
     <CheckBox
         android:id="@+id/cbBlockApp"

@@ -1,6 +1,8 @@
 package com.example.screen_timetracker
 
 import android.content.Context
+import android.text.Editable
+import android.text.TextWatcher
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -14,7 +16,6 @@ class AppAdapter(private val appList: List<AppItem>) : RecyclerView.Adapter<AppA
     class AppViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         val tvAppName: TextView = view.findViewById(R.id.tvAppName)
         val cbBlockApp: CheckBox = view.findViewById(R.id.cbBlockApp)
-        // 1. ADDED: The EditText for the time limit from your XML
         val etAppLimit: EditText = view.findViewById(R.id.etAppLimit)
     }
 
@@ -29,40 +30,65 @@ class AppAdapter(private val appList: List<AppItem>) : RecyclerView.Adapter<AppA
         val appItem = appList[position]
         holder.tvAppName.text = appItem.appName
 
-        // Remove listener temporarily so we don't trigger it while setting up
-        holder.cbBlockApp.setOnCheckedChangeListener(null)
-        holder.cbBlockApp.isChecked = appItem.isSelected
-
-        // 2. ADDED: Get context from the itemView to initialize SharedPreferences
         val context = holder.itemView.context
         val prefs = context.getSharedPreferences("BlockPrefs", Context.MODE_PRIVATE)
+        val limitKey = "limit_${appItem.packageName}"
 
-        // 3. INTEGRATED SNIPPET: Replaced the basic listener with your SharedPreferences logic
+        // 1. CLEAR OLD LISTENERS to prevent RecyclerView glitches
+        holder.cbBlockApp.setOnCheckedChangeListener(null)
+        if (holder.etAppLimit.tag is TextWatcher) {
+            holder.etAppLimit.removeTextChangedListener(holder.etAppLimit.tag as TextWatcher)
+        }
+
+        // 2. RETRIEVE AND DISPLAY SAVED LIMIT
+        val savedLimit = prefs.getInt(limitKey, 0)
+
+        if (savedLimit > 0) {
+            holder.etAppLimit.setText(savedLimit.toString())
+            holder.cbBlockApp.isChecked = true
+            appItem.isSelected = true
+        } else {
+            holder.etAppLimit.text.clear()
+            holder.cbBlockApp.isChecked = appItem.isSelected
+        }
+
+        // 3. CHECKBOX LISTENER
         holder.cbBlockApp.setOnCheckedChangeListener { _, isChecked ->
-            appItem.isSelected = isChecked // Keep your original state tracking
-
-            // Get the Set of currently blocked apps
+            appItem.isSelected = isChecked
             val blockedApps = prefs.getStringSet("blocked_apps", mutableSetOf())?.toMutableSet() ?: mutableSetOf()
 
             if (isChecked) {
-                // Changed 'currentApp' to 'appItem' to match your data class
                 blockedApps.add(appItem.packageName)
-
-                // Grab the minutes they typed (default to 30 if they left it blank)
                 val inputStr = holder.etAppLimit.text.toString()
                 val limitMins = if (inputStr.isNotEmpty()) inputStr.toInt() else 30
-
-                // Save the specific limit for this exact package
-                prefs.edit().putInt("limit_${appItem.packageName}", limitMins).apply()
-
+                prefs.edit().putInt(limitKey, limitMins).apply()
             } else {
                 blockedApps.remove(appItem.packageName)
-                // Clean up the limit if they unblock the app
-                prefs.edit().remove("limit_${appItem.packageName}").apply()
+                prefs.edit().remove(limitKey).apply()
+                holder.etAppLimit.text.clear()
             }
-
-            // Save the updated Set
             prefs.edit().putStringSet("blocked_apps", blockedApps).apply()
         }
+
+        // 4. TEXT WATCHER (Saves as you type)
+        val textWatcher = object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+
+            override fun afterTextChanged(s: Editable?) {
+                // Only save the typed limit if the checkbox is actually checked
+                if (holder.cbBlockApp.isChecked) {
+                    val inputStr = s.toString()
+                    if (inputStr.isNotEmpty()) {
+                        val limitMins = inputStr.toInt()
+                        prefs.edit().putInt(limitKey, limitMins).apply()
+                    }
+                }
+            }
+        }
+
+        // Attach the new watcher and save it to the tag so we can remove it later
+        holder.etAppLimit.addTextChangedListener(textWatcher)
+        holder.etAppLimit.tag = textWatcher
     }
 }
