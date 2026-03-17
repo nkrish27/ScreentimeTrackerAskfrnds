@@ -21,6 +21,7 @@ class RequestAdapter(private var requests: List<ExtensionRequest>) : RecyclerVie
         val btnApprove: Button = itemView.findViewById(R.id.btnApprove)
         val ivAppIcon: ImageView = itemView.findViewById(R.id.ivAppIcon)
         val btnDecline: Button = itemView.findViewById(R.id.btnDecline) // Added Decline Button
+        val tvDuration: TextView = itemView.findViewById(R.id.tvDuration)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RequestViewHolder {
@@ -49,6 +50,8 @@ class RequestAdapter(private var requests: List<ExtensionRequest>) : RecyclerVie
         }
 
         val currentStatus = currentRequest.status
+        val minutes = currentRequest.timeRequestedMins
+        holder.tvDuration.text = "Duration: $minutes mins"
 
         // Explicitly set ALL visual states for Approved, Declined, and Pending
         when (currentStatus) {
